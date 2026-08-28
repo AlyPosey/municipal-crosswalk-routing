@@ -1,0 +1,13 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Local transcripts / scratch (no server retention by design)
+*.local.json
+transcripts/
+.DS_Store
