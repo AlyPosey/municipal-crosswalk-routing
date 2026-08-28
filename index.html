@@ -24,8 +24,9 @@
     <h1>Who fixes this crosswalk?</h1>
     <p class="tagline">
       The crossing signal by your child&rsquo;s school is out. Three different agencies could own it.
-      Answer five questions and get a <strong>recommended first contact</strong> — with the evidence,
-      the gap in the public record, and a script for the call.
+      Answer five questions — or text a demo short code — and get a
+      <strong>recommended first contact</strong> — with the evidence, the gap in the public record,
+      and a script for the call.
     </p>
     <p class="mode" id="mode-banner" role="status" aria-live="polite">
       <span class="mode__dot" aria-hidden="true"></span>
@@ -36,45 +37,105 @@
 
 <main id="main" class="wrap">
 
-  <!-- ============ CONVERSATION ============ -->
-  <section class="panel" id="conversation-panel" aria-labelledby="conversation-heading">
-    <div class="panel__head">
-      <h2 id="conversation-heading">The conversation</h2>
-      <div class="voice">
-        <button type="button" id="voice-toggle" class="btn btn--ghost" aria-pressed="false" hidden>
-          <span aria-hidden="true">🎙</span> <span id="voice-label">Turn on voice</span>
-        </button>
-        <p class="voice__note" id="voice-note" hidden>
-          Voice is optional. Speech is handled by your browser, never recorded, never sent to a
-          server. Typing does exactly the same thing.
-        </p>
+  <!-- ============ ENTRY PATH SWITCHER ============ -->
+  <div class="path-tabs" id="path-tabs" role="tablist" aria-label="How you want to reach the tool">
+    <button type="button" id="tab-questions" class="tab" role="tab"
+      aria-selected="true" aria-controls="panel-questions">Answer five questions</button>
+    <button type="button" id="tab-text" class="tab" role="tab"
+      aria-selected="false" tabindex="-1" aria-controls="panel-text">Text the crossing (demo)</button>
+  </div>
+
+  <!-- ============ QUESTION PATH ============ -->
+  <div id="panel-questions" role="tabpanel" aria-labelledby="tab-questions">
+
+    <section class="panel" id="conversation-panel" aria-labelledby="conversation-heading">
+      <div class="panel__head">
+        <h2 id="conversation-heading">The conversation</h2>
+        <div class="voice" id="voice-panel">
+          <button type="button" id="voice-toggle" class="btn btn--ghost" aria-pressed="false" hidden>
+            <span aria-hidden="true">🎙</span> <span id="voice-label">Turn on voice</span>
+          </button>
+          <p class="voice__note" id="voice-note" hidden>
+            Voice is optional. Speech is handled by your browser, never recorded, never sent to a
+            server. Typing does exactly the same thing.
+          </p>
+          <div class="voice__status-block" id="voice-status-block" hidden>
+            <p class="voice__status" id="voice-status" role="status" aria-live="polite">Idle</p>
+            <p class="voice__heard" id="voice-heard"></p>
+            <p class="voice__help" id="voice-help"></p>
+            <p class="voice__error" id="voice-error" role="alert"></p>
+            <div class="voice__controls">
+              <button type="button" id="voice-repeat" class="btn btn--ghost btn--small">Say that again</button>
+              <select id="voice-picker" class="voice__picker" hidden aria-label="Choose a voice"></select>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <p class="privacy-note">
+        Please don&rsquo;t enter names, phone numbers, email addresses, or a real home address. This
+        tool never asks for them and has nowhere to store them.
+      </p>
+
+      <ol class="transcript" id="transcript" aria-label="Answers so far"></ol>
+
+      <div class="step" id="step" aria-live="polite">
+        <p class="step__count" id="step-count"></p>
+        <h3 class="step__question" id="step-question"></h3>
+        <p class="step__help" id="step-help"></p>
+        <div class="step__controls" id="step-controls"></div>
+      </div>
+
+      <div class="step__nav">
+        <button type="button" id="step-back" class="btn btn--back" disabled>&larr; Back</button>
+        <button type="button" id="restart" class="btn btn--ghost">Start over</button>
+      </div>
+    </section>
+
+    <!-- ============ RESULT ============ -->
+    <section class="panel panel--result" id="result-panel" aria-labelledby="result-heading" hidden>
+      <h2 id="result-heading" tabindex="-1">Where to start</h2>
+      <div id="result"></div>
+    </section>
+
+  </div>
+
+  <!-- ============ TEXT PATH ============ -->
+  <div id="panel-text" role="tabpanel" aria-labelledby="tab-text" hidden>
+
+    <section class="panel" id="thread-panel" aria-labelledby="thread-heading">
+      <h2 id="thread-heading">Text the crossing (demo)</h2>
+
+      <p class="thread-badge" id="thread-badge" role="note">
+        <strong>Prototype.</strong> The short code shown here is not a live phone number. Nothing you
+        type in this thread is actually sent anywhere.
+      </p>
+
+      <p class="thread-stage" id="thread-stage" role="status" aria-live="polite"></p>
+
+      <div class="phone-mockup">
+        <ol class="thread-messages" id="thread-messages" aria-label="Simulated message thread"></ol>
+        <form class="thread-composer" id="thread-composer">
+          <label class="field-label" for="thread-input">Your message</label>
+          <input type="text" id="thread-input" autocomplete="off" placeholder="Type a message&hellip;">
+          <button type="submit" class="btn" id="thread-send">Send</button>
+        </form>
+      </div>
+
+      <div class="step__nav">
+        <button type="button" id="thread-restart" class="btn btn--ghost">Restart the exchange</button>
+      </div>
+
+      <div id="thread-evidence"></div>
+    </section>
+
+    <div class="presenter-strip" id="presenter-strip">
+      <p class="presenter-strip__label"><strong>Presenter shortcut</strong> — not part of the resident
+        experience. Jump straight to a resolved case:</p>
+      <div class="presenter-strip__buttons" id="presenter-jump"></div>
     </div>
 
-    <p class="privacy-note">
-      Please don&rsquo;t enter names, phone numbers, email addresses, or a real home address. This
-      tool never asks for them and has nowhere to store them.
-    </p>
-
-    <ol class="transcript" id="transcript" aria-label="Answers so far"></ol>
-
-    <div class="step" id="step" aria-live="polite">
-      <p class="step__count" id="step-count"></p>
-      <h3 class="step__question" id="step-question"></h3>
-      <p class="step__help" id="step-help"></p>
-      <div class="step__controls" id="step-controls"></div>
-    </div>
-
-    <div class="step__nav">
-      <button type="button" id="restart" class="btn btn--ghost">Start over</button>
-    </div>
-  </section>
-
-  <!-- ============ RESULT ============ -->
-  <section class="panel panel--result" id="result-panel" aria-labelledby="result-heading" hidden>
-    <h2 id="result-heading" tabindex="-1">Where to start</h2>
-    <div id="result"></div>
-  </section>
+  </div>
 
 </main>
 
@@ -83,10 +144,11 @@
     <h2>What this is, and what it isn&rsquo;t</h2>
     <ul>
       <li><strong>It is</strong> a routing <em>suggestion</em> tool built on clearly-labeled synthetic cases.</li>
-      <li><strong>It is not</strong> a reporting system. Nothing you type is submitted anywhere.</li>
+      <li><strong>It is not</strong> a reporting system. Nothing you type, text, or speak is submitted anywhere.</li>
       <li><strong>It is not</strong> a legal determination of who is responsible. A person at the agency confirms that.</li>
       <li><strong>It does not</strong> use your location, look up boundaries, or call anyone — including 911.</li>
       <li><strong>It stores nothing.</strong> Your answers live in this browser tab and vanish when you reload.</li>
+      <li><strong>The text path is simulated.</strong> The short code is not a live number and no message is sent.</li>
     </ul>
     <p class="footer-links">
       <a href="https://github.com/Birmingham-AI/claude-impact-lab/blob/main/challenges/02-municipal-collaboration.md">Challenge 2 brief</a> ·

@@ -1,16 +1,17 @@
-# Jurisdiction Junction (2A) — Who Fixes This Crosswalk?
+# [Team Name] ([Team ID])
 
-**Working artifact: https://alyposey.github.io/municipal-crosswalk-routing/**
-
-> ⚠️ **Everything in this project is synthetic.** Fictional locations, fictional agencies, fictional
-> outcomes. Nothing here is a real resident, a real complaint, or a real agency determination. The
-> tool submits nothing to anyone and makes no legal determination of responsibility.
+> Copy this template into your public project repository's README and fill in every section. See SUBMISSIONS.md and JUDGING.md in the event repository for the full submission process and how this will be scored.
 
 ## Team
 
 - **Team name:** Jurisdiction Junction
 - **Team ID:** 2A
-- **Team members (optional):** Alyson Posey, Sarina P. Hall, LTW Montgomery, Kathy Chandler, Lance Moore
+- **Team members (optional):** 
+Alyson Posey
+Sarina P. Hall
+LTW Montgomery
+Kathy Chandler
+Lance Moore
 
 ## Challenge and primary user
 
@@ -93,43 +94,9 @@ invented ownership") is why the "model selects, local data renders" architecture
 
 **https://alyposey.github.io/municipal-crosswalk-routing/** — fully functional with no server.
 
-To run the live Claude path locally:
-
-```bash
-git clone https://github.com/AlyPosey/municipal-crosswalk-routing.git
-cd municipal-crosswalk-routing
-cp .env.example .env      # add your ANTHROPIC_API_KEY
-npm start                 # no install step — there are no dependencies
-# http://localhost:3000
-```
-
 Key files: [`app.js`](app.js) · [`data/cases.js`](data/cases.js) · [`server.js`](server.js) ·
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md) ·
 [`specs/001-crosswalk-routing/`](specs/001-crosswalk-routing/)
-
-## Verification
-
-```bash
-npm install     # jsdom, for the tests only — the app itself still has zero dependencies
-npm test
-```
-
-**55 assertions, all passing.** [`tests/routing.test.mjs`](tests/routing.test.mjs) lifts the real
-`matchCase()` source out of `app.js` so the test cannot drift from the implementation, and checks 10
-routing decisions including four unmatched inputs that must decline.
-[`tests/e2e.test.mjs`](tests/e2e.test.mjs) loads the real `index.html`, runs the real `app.js` under
-jsdom with every network call failing — exactly the GitHub Pages condition — and clicks through all
-four scenarios:
-
-| Scenario | Asserted |
-|---|---|
-| US1 municipal signal | Recommends city traffic engineering; ALDOT not primary; qualified wording; all three roles; school authority marked stakeholder-not-owner; evidence links; freshness date; gap; next action; call script; confirmation requirement; both notices; **no** emergency escalation |
-| US2 state-route beacon | Recommends the ALDOT district office; permit uncertainty visible; escalation path present; recommendation differs from US1 |
-| US3 unknown location | Declines to route; **names no agency**; asks the distinguishing question; offers the supported synthetic cases |
-| Immediate danger | Safety guidance shown; states it will not place a call; **no `tel:` link**; routing result still rendered beneath |
-
-Every scenario also asserts that the result stays hidden until the parent confirms, and that the
-mode banner reads "Simulated routing" when no server answers.
 
 ## What works today
 

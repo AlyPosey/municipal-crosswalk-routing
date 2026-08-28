@@ -3,14 +3,12 @@
 For the GitHub Issue Form at **Birmingham-AI/claude-impact-lab → New Issue → "Project Submission"**.
 Deadline **2:00 PM CDT, Friday 2026-08-28**.
 
-> **You need to fill in the Team ID yourself** — it is the one field we do not have.
-
 ---
 
 ### Team ID
 
 ```
-TODO — your assigned team ID
+2A
 ```
 
 ### Team name
@@ -23,6 +21,10 @@ Jurisdiction Junction
 
 ```
 Alyson Posey
+Sarina P. Hall
+LTW Montgomery
+Kathy Chandler
+Lance Moore
 ```
 
 ### Challenge

@@ -9,9 +9,7 @@ function check(name, cond, detail = '') {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : `   <-- ${detail}`}`);
 }
 
-async function run(scenario, { locationLabel, equipmentLabel, dangerLabel, freeText }) {
-  console.log(`\n──────── ${scenario} ────────`);
-
+async function bootApp() {
   const dom = new JSDOM(readFileSync(new URL('../index.html', import.meta.url), 'utf8'), { url: 'http://localhost/' });
   const { window } = dom;
   window.Element.prototype.scrollIntoView = () => {};
@@ -31,6 +29,13 @@ async function run(scenario, { locationLabel, equipmentLabel, dangerLabel, freeT
     if (!b) throw new Error(`no button matching "${text}" in: ${[...controls().querySelectorAll('button')].map((x) => x.textContent).join(' | ')}`);
     b.click();
   };
+  return { window, doc, controls, clickByText };
+}
+
+async function run(scenario, { locationLabel, equipmentLabel, dangerLabel, freeText }) {
+  console.log(`\n──────── ${scenario} ────────`);
+
+  const { doc, controls, clickByText } = await bootApp();
 
   check('mode banner says simulated with no server',
     doc.getElementById('mode-text').textContent.includes('Simulated routing'),
@@ -121,6 +126,116 @@ check('safety guidance shown', html.includes('stop reading and act'));
 check('states it will NOT place a call', html.includes('cannot and will not place a call'));
 check('no tel: link anywhere', !html.includes('tel:'));
 check('routing result still rendered beneath', html.includes('Fictional City of Lincoln Heights'));
+
+/* ---------- User Story 1: the confirmation gate itself (FR-001, FR-004, FR-005, FR-006) ---------- */
+{
+  console.log('\n──────── US1 — confirmation gate affordance ────────');
+  const { doc, clickByText } = await bootApp();
+  clickByText('Lincoln Heights Elementary');
+  clickByText('Traffic or walk signal');
+  clickByText('Yes');
+  clickByText('No — nobody is in danger');
+
+  const summary = doc.getElementById('confirm-summary');
+  const actions = doc.getElementById('confirm-actions');
+  const primaries = doc.querySelectorAll('#confirm-primary');
+  const secondaries = doc.querySelectorAll('#confirm-secondary');
+  check('confirm-summary renders on the confirmation step', Boolean(summary));
+  check('confirm-actions renders on the confirmation step', Boolean(actions));
+  check('exactly one #confirm-primary', primaries.length === 1);
+  check('exactly one #confirm-secondary', secondaries.length === 1);
+  check('primary and secondary carry different classes',
+    primaries[0].className !== secondaries[0].className,
+    `${primaries[0].className} vs ${secondaries[0].className}`);
+  check('#confirm-primary holds focus when the confirmation step renders',
+    doc.activeElement === primaries[0]);
+
+  primaries[0].click();
+  await new Promise((r) => setTimeout(r, 30));
+  check('activating the primary moves focus to #result-heading',
+    doc.activeElement === doc.getElementById('result-heading'));
+}
+
+/* ---------- User Story 2: back navigation (FR-007–FR-015) ---------- */
+{
+  console.log('\n──────── US2 — back navigation ────────');
+  const { doc, clickByText } = await bootApp();
+
+  check('#step-back is disabled at position 0', doc.getElementById('step-back').disabled === true);
+  doc.getElementById('step-back').click();   // no-op at position 0
+  check('repeated back at position 0 is a no-op (still on question 1)',
+    doc.getElementById('step-count').textContent.includes('Question 1 of'));
+
+  clickByText('Lincoln Heights Elementary');
+  clickByText('Traffic or walk signal');
+  check('#step-back enabled after the first answer', doc.getElementById('step-back').disabled === false);
+
+  doc.getElementById('step-back').click();
+  check('back returns to the immediately preceding question',
+    doc.getElementById('step-count').textContent.includes('Question 2 of'));
+  check('the previous answer is shown as current (aria-pressed)',
+    [...doc.querySelectorAll('#step-controls .btn--choice')]
+      .some((b) => b.textContent.includes('Traffic or walk signal') && b.getAttribute('aria-pressed') === 'true'));
+
+  // change the equipment answer, then confirm later answers survive
+  clickByText('Flashing school-zone beacon');
+  clickByText('Yes');
+  clickByText('No — nobody is in danger');
+  check('corrected answer reflected in the confirmation summary',
+    doc.getElementById('confirm-summary').textContent.includes('School-zone flashing beacon'));
+
+  // back from the confirmation step lands on the last question with answers intact
+  doc.getElementById('step-back').click();
+  check('back from confirmation lands on the last question',
+    doc.getElementById('step-count').textContent.includes(`Question 4 of`));
+  check('answers still intact after back-from-confirm',
+    [...doc.querySelectorAll('#step-controls .btn--choice')]
+      .some((b) => b.textContent.includes('No — nobody') && b.getAttribute('aria-pressed') === 'true'));
+
+  // re-confirm and then go back to prove the stale recommendation is withdrawn
+  clickByText('No — nobody is in danger');
+  clickByText('Yes — show me who to contact first');
+  await new Promise((r) => setTimeout(r, 30));
+  check('result shown after confirming', doc.getElementById('result-panel').hidden === false);
+  doc.getElementById('step-back').click();
+  check('back hides the stale recommendation', doc.getElementById('result-panel').hidden === true);
+
+  // free text is restored on back
+  const t2 = await bootApp();
+  const input = t2.doc.getElementById('free-text');
+  input.value = 'a fictional crossing I typed myself';
+  t2.clickByText('Continue');
+  t2.doc.getElementById('step-back').click();
+  check('previously typed free text is restored on back',
+    t2.doc.getElementById('free-text').value === 'a fictional crossing I typed myself');
+
+  // restart clears everything; back never does
+  const t3 = await bootApp();
+  t3.clickByText('Lincoln Heights Elementary');
+  t3.doc.getElementById('restart').click();
+  check('restart clears the answer (back to question 1)',
+    t3.doc.getElementById('step-count').textContent.includes('Question 1 of'));
+  check('restart empties the transcript', t3.doc.getElementById('transcript').innerHTML === '');
+}
+
+/* ---------- User Story 4: voice degrades cleanly with no Web Speech API (FR-041, FR-049) ---------- */
+{
+  console.log('\n──────── US4 — voice degradation with no speech APIs ────────');
+  const { doc, clickByText } = await bootApp();
+  check('voice toggle stays hidden with no Web Speech API in jsdom',
+    doc.getElementById('voice-toggle').hidden === true);
+  check('voice status block stays hidden', doc.getElementById('voice-status-block').hidden === true);
+
+  // the typed path still completes unchanged
+  clickByText('Lincoln Heights Elementary');
+  clickByText('Traffic or walk signal');
+  clickByText('Yes');
+  clickByText('No — nobody is in danger');
+  clickByText('Yes — show me who to contact first');
+  await new Promise((r) => setTimeout(r, 30));
+  check('typed path still completes with voice unsupported',
+    doc.getElementById('result-panel').hidden === false);
+}
 
 console.log(failures === 0 ? '\n✅ All end-to-end assertions passed.' : `\n❌ ${failures} FAILING`);
 process.exit(failures === 0 ? 0 : 1);

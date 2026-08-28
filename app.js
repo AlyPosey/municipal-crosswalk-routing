@@ -5,25 +5,18 @@
  * the routing step may only ever produce a `case_id` that exists in the local catalog, or the
  * string "unresolved". Every agency name, role, evidence string, link, gap, next action, and call
  * script rendered below is read from data/cases.js. No model-generated prose reaches the DOM.
+ *
+ * State lives in two small modules, not here: lib/conversation.js owns the question path's
+ * position/answers split, and lib/textThread.js owns the simulated text-message exchange. Both
+ * call the single shared match engine in lib/routing.js, so the two entry paths can never diverge
+ * (FR-030, SC-015). This file is boot, wiring, and rendering only.
  */
 
-import { CASES, getCase, MATCH_THRESHOLD, SOURCE_CHECKED } from './data/cases.js';
-
-/* ------------------------------------------------------------------ *
- * State
- * ------------------------------------------------------------------ */
-
-const answers = {
-  location: '',
-  equipment: '',
-  schoolZone: '',
-  danger: null,   // true | false
-};
-
-let stepIndex = 0;
-let liveMode = false;      // true only once /api/health answers successfully
-let voiceOn = false;
-let recognition = null;
+import { CASES, getCase, SOURCE_CHECKED } from './data/cases.js';
+import { matchCase } from './lib/routing.js';
+import { createConversation } from './lib/conversation.js';
+import { createThread } from './lib/textThread.js';
+import { createVoice } from './lib/voice.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -31,6 +24,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let liveMode = false;   // true only once /api/health answers successfully
 
 /* ------------------------------------------------------------------ *
  * Conversation definition — five questions, no personal identifiers
@@ -46,9 +41,11 @@ const STEPS = [
     type: 'text-with-choices',
     choices: [
       { value: 'A fictional intersection near Fictional Lincoln Heights Elementary, on a city street',
-        label: 'Fictional Lincoln Heights Elementary — city street' },
+        label: 'Fictional Lincoln Heights Elementary — city street',
+        synonyms: ['lincoln heights', 'lincoln', 'lincoln heights elementary'] },
       { value: 'A fictional crossing on Fictional State Route 42, next to Fictional Maple Ridge Middle School',
-        label: 'Fictional Maple Ridge Middle — State Route 42' },
+        label: 'Fictional Maple Ridge Middle — State Route 42',
+        synonyms: ['maple ridge', 'maple ridge middle', 'state route 42', 'route 42'] },
     ],
     placeholder: 'e.g. the crossing on the state route by the middle school',
   },
@@ -58,10 +55,14 @@ const STEPS = [
     help: 'Pick the closest match. This changes which office is likely to hold the equipment.',
     type: 'choices',
     choices: [
-      { value: 'Traffic signal / walk signal is dark or not changing', label: 'Traffic or walk signal' },
-      { value: 'School-zone flashing beacon is not flashing or is stuck on', label: 'Flashing school-zone beacon' },
-      { value: 'Pedestrian push button does nothing', label: 'Pedestrian push button' },
-      { value: 'Something else at the crossing', label: 'Something else' },
+      { value: 'Traffic signal / walk signal is dark or not changing', label: 'Traffic or walk signal',
+        synonyms: ['signal', 'walk signal', 'stoplight', 'traffic light'] },
+      { value: 'School-zone flashing beacon is not flashing or is stuck on', label: 'Flashing school-zone beacon',
+        synonyms: ['beacon', 'flashing beacon', 'flashing light'] },
+      { value: 'Pedestrian push button does nothing', label: 'Pedestrian push button',
+        synonyms: ['push button', 'button'] },
+      { value: 'Something else at the crossing', label: 'Something else',
+        synonyms: ['something else', 'other'] },
     ],
   },
   {
@@ -70,9 +71,12 @@ const STEPS = [
     help: 'School-zone equipment often involves a third party the city and state pages do not mention.',
     type: 'choices',
     choices: [
-      { value: 'Yes — it is a school-zone crossing', label: 'Yes' },
-      { value: 'No — not a school zone', label: 'No' },
-      { value: 'Not sure', label: 'Not sure' },
+      { value: 'Yes — it is a school-zone crossing', label: 'Yes',
+        synonyms: ['yes', 'school zone', 'it is a school zone'] },
+      { value: 'No — not a school zone', label: 'No',
+        synonyms: ['no', 'not a school zone'] },
+      { value: 'Not sure', label: 'Not sure',
+        synonyms: ['not sure', 'unsure', 'i do not know', 'dont know'] },
     ],
   },
   {
@@ -83,73 +87,96 @@ const STEPS = [
       'This tool cannot call anyone for you — it will only show you safety guidance.',
     type: 'choices',
     choices: [
-      { value: false, label: 'No — nobody is in danger right now' },
-      { value: true,  label: 'Yes — there is immediate danger or injury' },
+      { value: false, label: 'No — nobody is in danger right now',
+        synonyms: ['no', 'nobody', 'no danger', 'safe'] },
+      { value: true,  label: 'Yes — there is immediate danger or injury',
+        synonyms: ['yes', 'danger', 'emergency', 'someone is hurt'] },
     ],
   },
 ];
+
+const CONFIRM_STEP = {
+  type: 'confirm',
+  question: 'Does this look right?',
+  speechGuidance:
+    'Say confirm, or yes, to see the recommended first contact. Say back to change an answer, or ' +
+    'start over to begin again.',
+};
+
+function displayValue(key, value) {
+  if (key === 'danger') return value ? 'Yes — immediate danger reported' : 'No immediate danger';
+  return value;
+}
+
+const conversation = createConversation(STEPS);
 
 /* ------------------------------------------------------------------ *
  * Rendering the conversation
  * ------------------------------------------------------------------ */
 
 function renderTranscript() {
-  const items = [];
-  for (let i = 0; i < stepIndex && i < STEPS.length; i++) {
-    const s = STEPS[i];
-    let val = answers[s.key];
-    if (s.key === 'danger') val = val ? 'Yes — immediate danger reported' : 'No immediate danger';
-    items.push(`<li><span class="q">${esc(s.question)}</span><span class="a">${esc(val)}</span></li>`);
-  }
-  $('transcript').innerHTML = items.join('');
+  const items = conversation.summary().map(({ question, key, value }) =>
+    `<li><span class="q">${esc(question)}</span><span class="a">${esc(displayValue(key, value))}</span></li>`
+  ).join('');
+  $('transcript').innerHTML = items;
 }
 
-function renderStep({ takeFocus = true } = {}) {
+let suppressFocus = false;
+
+function renderStep(state, { takeFocus = true } = {}) {
   renderTranscript();
+  $('step-back').disabled = !conversation.canGoBack();
 
   const controls = $('step-controls');
   controls.innerHTML = '';
 
   // ---- past the last question: summary + confirmation gate (Constitution IV) ----
-  if (stepIndex >= STEPS.length) {
+  if (state.position >= STEPS.length) {
     $('step-count').textContent = 'Last step';
     $('step-question').textContent = 'Does this look right?';
     $('step-help').textContent =
       'Nothing is sent anywhere. Confirming just unlocks the recommendation below.';
 
+    const summaryBlock = document.createElement('div');
+    summaryBlock.id = 'confirm-summary';
+    summaryBlock.className = 'confirm-summary';
     const list = document.createElement('ul');
     list.className = 'summary-list';
-    list.innerHTML = STEPS.map((s) => {
-      let v = answers[s.key];
-      if (s.key === 'danger') v = v ? 'Yes — immediate danger reported' : 'No immediate danger';
-      return `<li><span class="k">${esc(s.question)}</span><br>${esc(v)}</li>`;
-    }).join('');
-    controls.appendChild(list);
+    list.innerHTML = conversation.summary().map(({ question, key, value }) =>
+      `<li><span class="k">${esc(question)}</span><br>${esc(displayValue(key, value))}</li>`
+    ).join('');
+    summaryBlock.appendChild(list);
+    controls.appendChild(summaryBlock);
+
+    const actions = document.createElement('div');
+    actions.id = 'confirm-actions';
+    actions.className = 'confirm-actions';
 
     const go = document.createElement('button');
     go.type = 'button';
-    go.className = 'btn btn--wide';
+    go.id = 'confirm-primary';
+    go.className = 'btn btn--primary btn--wide';
     go.textContent = 'Yes — show me who to contact first';
     go.addEventListener('click', runRouting);
-    controls.appendChild(go);
+    actions.appendChild(go);
 
     const back = document.createElement('button');
     back.type = 'button';
+    back.id = 'confirm-secondary';
     back.className = 'btn btn--ghost btn--wide';
     back.textContent = 'No — let me answer again';
-    back.addEventListener('click', reset);
-    controls.appendChild(back);
+    back.addEventListener('click', () => conversation.back());
+    actions.appendChild(back);
 
-    if (takeFocus) {
-      go.focus();
-      speak('Does this look right? Confirm to see the recommended first contact.');
-    }
+    controls.appendChild(actions);
+
+    if (takeFocus) go.focus();
     return;
   }
 
   // ---- an ordinary question ----
-  const step = STEPS[stepIndex];
-  $('step-count').textContent = `Question ${stepIndex + 1} of ${STEPS.length}`;
+  const step = STEPS[state.position];
+  $('step-count').textContent = `Question ${state.position + 1} of ${STEPS.length}`;
   $('step-question').textContent = step.question;
   $('step-help').textContent = step.help;
 
@@ -160,8 +187,11 @@ function renderStep({ takeFocus = true } = {}) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn btn--choice';
+      const isCurrent = state.answers[step.key] === c.value;
+      b.setAttribute('aria-pressed', String(isCurrent));
+      if (isCurrent) b.classList.add('is-current');
       b.textContent = c.label;
-      b.addEventListener('click', () => answer(step.key, c.value));
+      b.addEventListener('click', () => conversation.setAnswer(step.key, c.value));
       box.appendChild(b);
     });
     controls.appendChild(box);
@@ -178,6 +208,8 @@ function renderStep({ takeFocus = true } = {}) {
     input.id = 'free-text';
     input.placeholder = step.placeholder || '';
     input.autocomplete = 'off';
+    const isChip = step.choices.some((c) => c.value === state.answers[step.key]);
+    if (!isChip && state.answers[step.key]) input.value = state.answers[step.key];
 
     const submit = document.createElement('button');
     submit.type = 'button';
@@ -185,7 +217,7 @@ function renderStep({ takeFocus = true } = {}) {
     submit.textContent = 'Continue';
     const send = () => {
       const v = input.value.trim();
-      if (v) answer(step.key, v);
+      if (v) conversation.setAnswer(step.key, v);
       else input.focus();
     };
     submit.addEventListener('click', send);
@@ -196,77 +228,23 @@ function renderStep({ takeFocus = true } = {}) {
 
   if (takeFocus) {
     const first = controls.querySelector('button, input');
-    if (first && stepIndex > 0) first.focus();
-    speak(step.question);
+    if (first && state.position > 0) first.focus();
   }
 }
 
-function answer(key, value) {
-  answers[key] = value;
-  stepIndex++;
-  $('result-panel').hidden = true;
-  renderStep();
-}
-
-function reset() {
-  stepIndex = 0;
-  answers.location = answers.equipment = answers.schoolZone = '';
-  answers.danger = null;
-  $('result-panel').hidden = true;
-  $('result').innerHTML = '';
-  renderStep();
+function render(state) {
+  renderStep(state, { takeFocus: !suppressFocus });
+  suppressFocus = false;
+  $('result-panel').hidden = !state.resultVisible;
+  if (voiceEnabled) voice.speakStep(currentVoiceStep(state));
 }
 
 /* ------------------------------------------------------------------ *
- * Routing — deterministic engine is the floor; the model only ever selects
+ * Routing — deterministic engine (lib/routing.js) is the floor; the model only ever selects
  * ------------------------------------------------------------------ */
 
-/**
- * Score the parent's answers against each case's keywords.
- *
- * Location is scored separately and is the gate. Equipment and school-zone answers can only break a
- * tie or widen a lead — they can never, on their own, produce a match. Without that split, a
- * description like "the light by the Walmart" would score on the word "signal" from the equipment
- * question and get routed to a city we have no reason to think is involved, which is precisely the
- * failure Constitution III forbids.
- *
- * Returns { case_id, score }, with case_id null when nothing clears MATCH_THRESHOLD on location.
- */
-function matchCase() {
-  const place = String(answers.location).toLowerCase();
-  const context = `${answers.equipment} ${answers.schoolZone}`.toLowerCase();
-
-  const score = (text, c) => {
-    let n = 0;
-    for (const kw of c.match_keywords) {
-      if (text.includes(kw.toLowerCase())) n += kw.includes(' ') ? 2 : 1;
-    }
-    return n;
-  };
-
-  const scored = CASES.map((c) => {
-    const locationScore = score(place, c);
-    let contextScore = score(context, c);
-    // Equipment type is a strong secondary signal: a beacon points at the state-route case.
-    for (const hint of c.equipment_hints || []) {
-      if (context.includes(hint)) contextScore += 2;
-    }
-    return { case_id: c.case_id, locationScore, score: locationScore + contextScore };
-  }).sort((a, b) => b.score - a.score);
-
-  const [best, runnerUp] = scored;
-
-  // Gate: the location must identify the case. Context alone is never enough.
-  if (!best || best.locationScore < MATCH_THRESHOLD) return { case_id: null, score: 0 };
-
-  // A tie means the description genuinely does not distinguish the cases — do not guess.
-  if (runnerUp && best.score === runnerUp.score) return { case_id: null, score: best.score };
-
-  return best;
-}
-
 /** Ask the local proxy, if one is there. Returns a case_id string or null. Never returns prose. */
-async function routeViaServer() {
+async function routeViaServer(answers) {
   try {
     const res = await fetch('./api/route', {
       method: 'POST',
@@ -290,18 +268,24 @@ async function routeViaServer() {
   }
 }
 
+let lastResultSpeech = '';
+
 async function runRouting() {
   $('step-controls').innerHTML = '<p>Working out who to send you to&hellip;</p>';
 
+  const answers = conversation.getState().answers;
   let caseId = null;
-  if (liveMode) caseId = await routeViaServer();
-  if (!caseId) caseId = matchCase().case_id;   // deterministic floor
+  if (liveMode) caseId = await routeViaServer(answers);
+  if (!caseId) caseId = matchCase(answers).case_id;   // deterministic floor
 
   const matched = caseId ? getCase(caseId) : null;
-  renderResult(matched);
+  renderResult(matched, answers);
+  lastResultSpeech = matched
+    ? `Recommended first contact, pending confirmation: ${matched.agencies.find((a) => a.role === 'primary').name}.`
+    : "I don't have enough to route this, so I'm not going to guess.";
 
-  stepIndex = STEPS.length;
-  renderStep({ takeFocus: false });          // keep focus heading to the result, not back up the page
+  suppressFocus = true;
+  conversation.confirm();
   $('result-panel').hidden = false;
   const heading = $('result-heading');
   heading.focus();
@@ -309,7 +293,7 @@ async function runRouting() {
 }
 
 /* ------------------------------------------------------------------ *
- * Rendering the result
+ * Rendering the result — one evidence renderer, used by both entry paths (FR-024, R13)
  * ------------------------------------------------------------------ */
 
 const NOTICES = `
@@ -357,7 +341,7 @@ function unresolvedBlock() {
   return `
   <div class="callout callout--gap">
     <h3>I don&rsquo;t have enough to route this, and I&rsquo;m not going to guess</h3>
-    <p>What you described doesn&rsquo;t clearly match either synthetic case I hold, and picking an
+    <p>What you described doesn&rsquo;t clearly match a synthetic case I hold, and picking an
     agency anyway would be worse than saying so. Naming the wrong office is exactly the failure this
     tool exists to prevent.</p>
     <p><strong>What would help:</strong> whether the crossing is on a city street or a state-numbered
@@ -367,45 +351,25 @@ function unresolvedBlock() {
   <div class="result-section">
     <h3>Scenarios this prototype does cover</h3>
     <ul class="agency__evidence">${options}</ul>
-    <p class="freshness">Both are synthetic. Use &ldquo;Start over&rdquo; to try one.</p>
+    <p class="freshness">All synthetic. Use &ldquo;Start over&rdquo; to try one.</p>
   </div>`;
 }
 
-function renderResult(c) {
-  const out = $('result');
-  const danger = answers.danger === true ? dangerPanel() : '';
-
-  if (!c) {
-    out.innerHTML = danger + unresolvedBlock() + NOTICES;
-    return;
-  }
-
+/** Shared by the question-path result and the text-path routed reply (FR-024, R13). */
+function evidenceMarkup(c, prefix) {
   const primary = c.agencies.find((a) => a.role === 'primary');
-
-  const summary = STEPS.map((s) => {
-    let v = answers[s.key];
-    if (s.key === 'danger') v = v ? 'Yes — immediate danger reported' : 'No immediate danger';
-    return `<li><span class="k">${esc(s.question)}</span><br>${esc(v)}</li>`;
-  }).join('');
-
-  out.innerHTML = `
-    ${danger}
-
+  return `
     <div class="rec">
       <p class="rec__label">Recommended first contact — pending human confirmation</p>
       <h3 class="rec__name">${esc(primary.name)}</h3>
       <p class="rec__pending">
         This is a <strong>starting point, not an answer</strong>. It is where the evidence points
         first for a ${esc(c.service_type.toLowerCase())} in this situation. Nobody has confirmed that
-        this office owns this specific equipment.
+        this office holds this specific equipment.
       </p>
-    </div>
-
-    <div class="result-section">
-      <h3>What you told me</h3>
-      <ul class="summary-list">${summary}</ul>
-      <p class="freshness">Matched to synthetic case <strong>${esc(c.case_id)}</strong> ·
-        ${esc(c.road_context)}</p>
+      ${primary.contact_phone
+        ? `<p class="rec__phone">Fictional number — this tool will not call it: <strong>${esc(primary.contact_phone)}</strong></p>`
+        : ''}
     </div>
 
     <div class="result-section">
@@ -424,8 +388,8 @@ function renderResult(c) {
       <h3>What to do next</h3>
       <p>${esc(c.next_action)}</p>
       <h4>Something to say when they pick up</h4>
-      <div class="script" id="script-text">${esc(c.call_script)}</div>
-      <button type="button" class="btn btn--ghost" id="copy-script">Copy this script</button>
+      <div class="script" id="${prefix}-script-text">${esc(c.call_script)}</div>
+      <button type="button" class="btn btn--ghost" id="${prefix}-copy-script">Copy this script</button>
     </div>
 
     <div class="callout callout--confirm">
@@ -436,21 +400,48 @@ function renderResult(c) {
     </div>
 
     ${NOTICES}`;
+}
 
-  const copy = $('copy-script');
-  if (copy) {
-    copy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(c.call_script);
-        copy.textContent = 'Copied';
-        setTimeout(() => { copy.textContent = 'Copy this script'; }, 2000);
-      } catch {
-        copy.textContent = 'Select the text above to copy';
-      }
-    });
+function wireCopyScript(c, prefix) {
+  const copy = $(`${prefix}-copy-script`);
+  if (!copy) return;
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(c.call_script);
+      copy.textContent = 'Copied';
+      setTimeout(() => { copy.textContent = 'Copy this script'; }, 2000);
+    } catch {
+      copy.textContent = 'Select the text above to copy';
+    }
+  });
+}
+
+function questionSummaryMarkup(answers) {
+  return STEPS.map((s) =>
+    `<li><span class="k">${esc(s.question)}</span><br>${esc(displayValue(s.key, answers[s.key]))}</li>`
+  ).join('');
+}
+
+function renderResult(c, answers) {
+  const out = $('result');
+  const danger = answers.danger === true ? dangerPanel() : '';
+
+  if (!c) {
+    out.innerHTML = danger + unresolvedBlock() + NOTICES;
+    return;
   }
 
-  speak(`Recommended first contact, pending confirmation: ${primary.name}.`);
+  out.innerHTML = `
+    ${danger}
+    <div class="result-section">
+      <h3>What you told me</h3>
+      <ul class="summary-list">${questionSummaryMarkup(answers)}</ul>
+      <p class="freshness">Matched to synthetic case <strong>${esc(c.case_id)}</strong> ·
+        ${esc(c.road_context)}</p>
+    </div>
+    ${evidenceMarkup(c, 'result')}`;
+
+  wireCopyScript(c, 'result');
 }
 
 /* ------------------------------------------------------------------ *
@@ -478,58 +469,206 @@ async function probeMode() {
 }
 
 /* ------------------------------------------------------------------ *
- * Voice — optional enhancement. Browser-side only, nothing recorded or sent.
+ * Entry-path switcher — exactly one conversation is active at a time (FR-032, R12)
  * ------------------------------------------------------------------ */
 
-function speak(phrase) {
-  if (!voiceOn || !('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(phrase));
+const TABS = [
+  { tab: 'tab-questions', panel: 'panel-questions', name: 'questions' },
+  { tab: 'tab-text', panel: 'panel-text', name: 'text' },
+];
+
+function selectTab(name) {
+  for (const t of TABS) {
+    const isActive = t.name === name;
+    $(t.tab).setAttribute('aria-selected', String(isActive));
+    $(t.tab).tabIndex = isActive ? 0 : -1;
+    $(t.panel).hidden = !isActive;
+  }
 }
 
-function setupVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const canSpeak = 'speechSynthesis' in window;
-  if (!SR && !canSpeak) return;   // stays hidden; text path is untouched
+TABS.forEach(({ tab, name }, i) => {
+  const btn = $(tab);
+  btn.addEventListener('click', () => selectTab(name));
+  btn.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length];
+    $(next.tab).focus();
+    selectTab(next.name);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Text-message entry path — a simulation, nothing sent (FR-016–FR-032)
+ * ------------------------------------------------------------------ */
+
+const thread = createThread();
+
+const STAGE_LABEL = { trigger: 'Send the trigger word', ack: 'Acknowledgement', pinpoint: 'Pinpointing the crossing', routed: 'Routed' };
+const STAGE_NUMBER = { trigger: 1, ack: 2, pinpoint: 3, routed: 4 };
+
+function renderThread(state) {
+  $('thread-stage').textContent =
+    `Stage ${STAGE_NUMBER[state.stage] || 1} of 4 — ${STAGE_LABEL[state.stage] || state.stage}`;
+
+  $('thread-messages').innerHTML = state.messages.map((m) =>
+    `<li class="thread-msg thread-msg--${esc(m.from)}">
+       <span class="thread-msg__from">${m.from === 'resident' ? 'You' : 'Service'}</span>
+       <p>${esc(m.text)}</p>
+     </li>`
+  ).join('');
+
+  const evidenceEl = $('thread-evidence');
+  if (state.stage === 'routed' && state.matchedCaseId) {
+    const c = getCase(state.matchedCaseId);
+    evidenceEl.innerHTML = c ? evidenceMarkup(c, 'thread') : '';
+    if (c) wireCopyScript(c, 'thread');
+  } else {
+    evidenceEl.innerHTML = '';
+  }
+
+  const list = $('thread-messages');
+  list.scrollTop = list.scrollHeight;
+}
+
+thread.subscribe(renderThread);
+
+$('thread-composer').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = $('thread-input');
+  const v = input.value.trim();
+  if (!v) return;
+  thread.send(v);
+  input.value = '';
+  input.focus();
+});
+
+$('thread-restart').addEventListener('click', () => thread.restart());
+
+const presenterJump = $('presenter-jump');
+presenterJump.innerHTML = CASES.map((c) =>
+  `<button type="button" class="btn btn--ghost btn--small" data-case="${esc(c.case_id)}">${esc(c.service_type)}</button>`
+).join('');
+presenterJump.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-case]');
+  if (!btn) return;
+  selectTab('text');
+  thread.jumpToCase(btn.dataset.case);
+});
+
+/* ------------------------------------------------------------------ *
+ * Voice — optional enhancement. Browser-side only, nothing recorded or sent (FR-033–FR-050)
+ * ------------------------------------------------------------------ */
+
+let voiceEnabled = false;
+
+function currentVoiceStep(state) {
+  if (state.resultVisible) return { type: 'confirm', question: lastResultSpeech };
+  if (state.position >= STEPS.length) return CONFIRM_STEP;
+  return STEPS[state.position];
+}
+
+function handleVoiceStatus({ mode, lastHeard, error } = {}) {
+  const statusEl = $('voice-status');
+  if (statusEl && mode) statusEl.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+  const heardEl = $('voice-heard');
+  if (heardEl) heardEl.textContent = lastHeard ? `Heard: "${lastHeard}"` : '';
+  const errorEl = $('voice-error');
+  if (errorEl) {
+    errorEl.textContent = error || '';
+    errorEl.hidden = !error;
+  }
+}
+
+const voice = createVoice({
+  getStep: () => currentVoiceStep(conversation.getState()),
+  onStatus: handleVoiceStatus,
+  onCommand: (cmd) => {
+    switch (cmd) {
+      case 'repeat':
+        voice.repeat();
+        break;
+      case 'back':
+        conversation.back();
+        break;
+      case 'restart':
+        conversation.restart();
+        break;
+      case 'confirm': {
+        const s = conversation.getState();
+        if (s.position >= STEPS.length && !s.resultVisible) runRouting();
+        break;
+      }
+      default:
+        break;
+    }
+  },
+  onChoice: (value) => {
+    const s = conversation.getState();
+    if (s.position < STEPS.length) conversation.setAnswer(STEPS[s.position].key, value);
+  },
+  onFreeText: (value) => {
+    const s = conversation.getState();
+    if (s.position < STEPS.length) conversation.setAnswer(STEPS[s.position].key, value);
+  },
+});
+
+function populateVoicePicker() {
+  const picker = $('voice-picker');
+  const voices = voice.listVoices();
+  if (voices.length > 1) {
+    picker.innerHTML = voices.map((v) => `<option value="${esc(v.voiceURI)}">${esc(v.name)}</option>`).join('');
+    picker.hidden = false;
+  } else {
+    picker.hidden = true;
+  }
+}
+
+function setupVoiceUI() {
+  const { canSpeak, canListen } = voice.isSupported();
+  if (!canSpeak && !canListen) return;   // stays hidden; text and typed paths are untouched
 
   const toggle = $('voice-toggle');
   toggle.hidden = false;
-  $('voice-note').hidden = false;
-
-  if (SR) {
-    recognition = new SR();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.addEventListener('result', (e) => {
-      const said = e.results[0][0].transcript;
-      const input = $('free-text');
-      if (input) { input.value = said; input.focus(); }
-    });
-    recognition.addEventListener('error', () => { /* silently fall back to typing */ });
+  const note = $('voice-note');
+  note.hidden = false;
+  if (!canSpeak) {
+    note.textContent = 'This browser can listen but not speak prompts aloud. Typing does exactly the same thing.';
+  } else if (!canListen) {
+    note.textContent = 'This browser can speak prompts aloud but cannot listen. Typing does exactly the same thing.';
   }
 
   toggle.addEventListener('click', () => {
-    voiceOn = !voiceOn;
-    toggle.setAttribute('aria-pressed', String(voiceOn));
-    $('voice-label').textContent = voiceOn ? 'Turn off voice' : 'Turn on voice';
-    if (voiceOn) {
-      speak($('step-question').textContent);
-      if (recognition && $('free-text')) { try { recognition.start(); } catch { /* already running */ } }
-    } else if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      if (recognition) { try { recognition.stop(); } catch { /* not running */ } }
+    voiceEnabled = !voiceEnabled;
+    toggle.setAttribute('aria-pressed', String(voiceEnabled));
+    $('voice-label').textContent = voiceEnabled ? 'Turn off voice' : 'Turn on voice';
+    $('voice-status-block').hidden = !voiceEnabled;
+    $('voice-help').textContent =
+      'Speak your answer, or say "repeat", "back", "start over", or "confirm". ' +
+      'Say "stop listening" to turn voice off.';
+    if (voiceEnabled) {
+      voice.enable();
+      populateVoicePicker();
+      voice.speakStep(currentVoiceStep(conversation.getState()));
+    } else {
+      voice.disable();
     }
   });
+
+  $('voice-repeat').addEventListener('click', () => voice.repeat());
+  $('voice-picker').addEventListener('change', (e) => voice.setVoice(e.target.value));
 }
 
 /* ------------------------------------------------------------------ *
  * Boot
  * ------------------------------------------------------------------ */
 
-$('restart').addEventListener('click', reset);
-setupVoice();
-renderStep();
+$('restart').addEventListener('click', () => conversation.restart());
+$('step-back').addEventListener('click', () => conversation.back());
+conversation.subscribe(render);
+render(conversation.getState());
+renderThread(thread.getState());
+
+setupVoiceUI();
 probeMode();
 
 // Surfaced for the README's verification steps.

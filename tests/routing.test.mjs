@@ -1,10 +1,5 @@
-// Exercises the REAL matchCase() source lifted out of app.js, so this test cannot drift from it.
-import { readFileSync } from 'node:fs';
-import { CASES, MATCH_THRESHOLD } from '../data/cases.js';
-
-const src = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-const fnSrc = src.match(/function matchCase\(\)\s*\{[\s\S]*?\n\}/)[0];
-const run = new Function('CASES', 'MATCH_THRESHOLD', 'answers', `${fnSrc}\nreturn matchCase();`);
+// Exercises the real matchCase() from lib/routing.js — the single engine both entry paths call.
+import { matchCase } from '../lib/routing.js';
 
 const LINCOLN = 'A fictional intersection near Fictional Lincoln Heights Elementary, on a city street';
 const MAPLE = 'A fictional crossing on Fictional State Route 42, next to Fictional Maple Ridge Middle School';
@@ -24,14 +19,19 @@ const cases = [
   ['US3 vague',                   'a school',  BUTTON, YES, null],
   ['municipal chip + beacon',     LINCOLN, BEACON, YES, 'CASE-03'],
   ['state chip + signal',         MAPLE,   SIGNAL, YES, 'CASE-03B'],
+  // Context-only input: equipment and school zone answered, location empty or unrelated — never a match.
+  ['context-only, empty location',      '', SIGNAL, YES, null],
+  ['context-only, unrelated location',  'somewhere near a park', BEACON, YES, null],
+  // A tie means the description does not distinguish the cases — decline, never guess.
+  ['equally-matching input ties',       'lincoln heights state route', BUTTON, YES, null],
 ];
 
 let fail = 0;
 for (const [name, location, equipment, schoolZone, expected] of cases) {
-  const got = run(CASES, MATCH_THRESHOLD, { location, equipment, schoolZone });
+  const got = matchCase({ location, equipment, schoolZone });
   const ok = got.case_id === expected;
   if (!ok) fail++;
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(28)} expected=${String(expected).padEnd(9)} got=${String(got.case_id).padEnd(9)} score=${got.score}`);
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(36)} expected=${String(expected).padEnd(9)} got=${String(got.case_id).padEnd(9)} score=${got.score}`);
 }
 console.log(fail === 0 ? '\nAll routing assertions passed.' : `\n${fail} FAILING`);
 process.exit(fail === 0 ? 0 : 1);
