@@ -5,7 +5,12 @@
   "type": "module",
   "description": "Synthetic school-zone crosswalk signal routing assistant — Birmingham Claude Impact Lab, Challenge 2. Team Jurisdiction Junction.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tests/routing.test.mjs && node tests/e2e.test.mjs"
+  },
+  "//": "The app itself has ZERO dependencies — `npm start` needs no install. jsdom is used only by the test harness.",
+  "devDependencies": {
+    "jsdom": "^25.0.0"
   },
   "engines": {
     "node": ">=18"

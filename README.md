@@ -141,6 +141,30 @@ Key files: [`app.js`](app.js) · [`data/cases.js`](data/cases.js) · [`server.js
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md) ·
 [`specs/001-crosswalk-routing/`](specs/001-crosswalk-routing/)
 
+## Verification
+
+```bash
+npm install     # jsdom, for the tests only — the app itself still has zero dependencies
+npm test
+```
+
+**55 assertions, all passing.** [`tests/routing.test.mjs`](tests/routing.test.mjs) lifts the real
+`matchCase()` source out of `app.js` so the test cannot drift from the implementation, and checks 10
+routing decisions including four unmatched inputs that must decline.
+[`tests/e2e.test.mjs`](tests/e2e.test.mjs) loads the real `index.html`, runs the real `app.js` under
+jsdom with every network call failing — exactly the GitHub Pages condition — and clicks through all
+four scenarios:
+
+| Scenario | Asserted |
+|---|---|
+| US1 municipal signal | Recommends city traffic engineering; ALDOT not primary; qualified wording; all three roles; school authority marked stakeholder-not-owner; evidence links; freshness date; gap; next action; call script; confirmation requirement; both notices; **no** emergency escalation |
+| US2 state-route beacon | Recommends the ALDOT district office; permit uncertainty visible; escalation path present; recommendation differs from US1 |
+| US3 unknown location | Declines to route; **names no agency**; asks the distinguishing question; offers the supported synthetic cases |
+| Immediate danger | Safety guidance shown; states it will not place a call; **no `tel:` link**; routing result still rendered beneath |
+
+Every scenario also asserts that the result stays hidden until the parent confirms, and that the
+mode banner reads "Simulated routing" when no server answers.
+
 ## What works today
 
 - Both synthetic cases route end to end and produce **different** recommended first contacts.

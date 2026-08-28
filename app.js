@@ -268,7 +268,7 @@ function matchCase() {
 /** Ask the local proxy, if one is there. Returns a case_id string or null. Never returns prose. */
 async function routeViaServer() {
   try {
-    const res = await fetch('/api/route', {
+    const res = await fetch('./api/route', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -461,7 +461,7 @@ async function probeMode() {
   const banner = $('mode-banner');
   const text = $('mode-text');
   try {
-    const res = await fetch('/api/health', { cache: 'no-store' });
+    const res = await fetch('./api/health', { cache: 'no-store' });
     const data = await res.json();
     if (res.ok && data.claude === true) {
       liveMode = true;

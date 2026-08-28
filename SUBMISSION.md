@@ -142,6 +142,11 @@ a prompt instruction.
   unsupported, with a fully equivalent text path. No audio is recorded or transmitted.
 - Keyboard-operable throughout with visible focus states; responsive at 375px and desktop.
 - A visible banner always states which routing path produced the result.
+- Verified by 55 passing assertions (npm test). tests/routing.test.mjs lifts the real matchCase()
+  source out of app.js so the test cannot drift from the implementation; tests/e2e.test.mjs loads
+  the real index.html and runs the real app.js under jsdom with every network call failing --
+  exactly the GitHub Pages condition -- and clicks through all four scenarios including the
+  must-not-guess path and the immediate-danger path.
 ```
 
 ### Limitations
