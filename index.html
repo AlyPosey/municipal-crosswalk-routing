@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who Fixes This Crosswalk? — Jurisdiction Junction</title>
+<meta name="description" content="A synthetic routing-suggestion tool that helps a parent find the right first agency to call about a school-zone crosswalk signal outage. Birmingham Claude Impact Lab, Challenge 2.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to the conversation</a>
+
+<div class="banner banner--synthetic" role="note">
+  <strong>Everything in this tool is synthetic.</strong>
+  Fictional locations, fictional agencies, fictional outcomes. Nothing here is a real complaint, a
+  real agency determination, or an endorsement by any agency. <strong>This tool does not submit
+  anything to anyone</strong> — it does not file tickets, send referrals, or place calls.
+</div>
+
+<header class="site-header">
+  <div class="wrap">
+    <p class="eyebrow">Birmingham Claude Impact Lab · Challenge 2 · Team Jurisdiction Junction</p>
+    <h1>Who fixes this crosswalk?</h1>
+    <p class="tagline">
+      The crossing signal by your child&rsquo;s school is out. Three different agencies could own it.
+      Answer five questions and get a <strong>recommended first contact</strong> — with the evidence,
+      the gap in the public record, and a script for the call.
+    </p>
+    <p class="mode" id="mode-banner" role="status" aria-live="polite">
+      <span class="mode__dot" aria-hidden="true"></span>
+      <span id="mode-text">Checking routing mode&hellip;</span>
+    </p>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+
+  <!-- ============ CONVERSATION ============ -->
+  <section class="panel" id="conversation-panel" aria-labelledby="conversation-heading">
+    <div class="panel__head">
+      <h2 id="conversation-heading">The conversation</h2>
+      <div class="voice">
+        <button type="button" id="voice-toggle" class="btn btn--ghost" aria-pressed="false" hidden>
+          <span aria-hidden="true">🎙</span> <span id="voice-label">Turn on voice</span>
+        </button>
+        <p class="voice__note" id="voice-note" hidden>
+          Voice is optional. Speech is handled by your browser, never recorded, never sent to a
+          server. Typing does exactly the same thing.
+        </p>
+      </div>
+    </div>
+
+    <p class="privacy-note">
+      Please don&rsquo;t enter names, phone numbers, email addresses, or a real home address. This
+      tool never asks for them and has nowhere to store them.
+    </p>
+
+    <ol class="transcript" id="transcript" aria-label="Answers so far"></ol>
+
+    <div class="step" id="step" aria-live="polite">
+      <p class="step__count" id="step-count"></p>
+      <h3 class="step__question" id="step-question"></h3>
+      <p class="step__help" id="step-help"></p>
+      <div class="step__controls" id="step-controls"></div>
+    </div>
+
+    <div class="step__nav">
+      <button type="button" id="restart" class="btn btn--ghost">Start over</button>
+    </div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section class="panel panel--result" id="result-panel" aria-labelledby="result-heading" hidden>
+    <h2 id="result-heading" tabindex="-1">Where to start</h2>
+    <div id="result"></div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <h2>What this is, and what it isn&rsquo;t</h2>
+    <ul>
+      <li><strong>It is</strong> a routing <em>suggestion</em> tool built on clearly-labeled synthetic cases.</li>
+      <li><strong>It is not</strong> a reporting system. Nothing you type is submitted anywhere.</li>
+      <li><strong>It is not</strong> a legal determination of who is responsible. A person at the agency confirms that.</li>
+      <li><strong>It does not</strong> use your location, look up boundaries, or call anyone — including 911.</li>
+      <li><strong>It stores nothing.</strong> Your answers live in this browser tab and vanish when you reload.</li>
+    </ul>
+    <p class="footer-links">
+      <a href="https://github.com/Birmingham-AI/claude-impact-lab/blob/main/challenges/02-municipal-collaboration.md">Challenge 2 brief</a> ·
+      <a href="https://github.com/Birmingham-AI/claude-impact-lab/blob/main/resources/02-municipal-collaboration.md">Resource pack</a> ·
+      <a href="https://github.com/Birmingham-AI/claude-impact-lab/blob/main/RULES.md">Event rules</a>
+    </p>
+  </div>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
