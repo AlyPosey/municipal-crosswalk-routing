@@ -16,7 +16,7 @@
 | Local artifact copy | `school-zone-locator.html` — HTML/JS intake tool with web + SMS-mockup channels |
 | Case-level reference | `school-zone-crosswalk-handoff.md` — CASE-03 and CASE-03B one-page handoff cards |
 | Pitch deck | `jurisdiction-junction-pitch.pptx` — 10 slides, built for the 4-min presentation + 2-min Q&A format |
-| Team README (required by SUBMISSIONS.md) | **Not yet drafted — this is the biggest open item** |
+| Team README (required by SUBMISSIONS.md) | ✅ Drafted — `README.md` covers all required sections |
 
 ---
 
@@ -33,7 +33,7 @@ Accepts a plain-language question, an address, or a labeled synthetic case, and 
 It never files a ticket, referral, or service request, and it never makes a legal responsibility determination — a human confirms that.
 
 ### Data model
-The ownership matrix (currently three synthetic cases: municipal, state-route/ALDOT, county) is static and human-curated. The tool's only job is matching input to a row and rendering it honestly — not inferring jurisdiction from first principles.
+The ownership matrix (currently four synthetic cases: two municipal, two state-route/ALDOT) is static and human-curated. The tool's only job is matching input to a row and rendering it honestly — not inferring jurisdiction from first principles.
 
 ---
 
@@ -47,24 +47,28 @@ Cross-referenced against `RULES.md` and `JUDGING.md`'s eligibility gate:
 | No tickets/referrals/requests submitted | ✅ Confirmed on the live site |
 | Synthetic data labeled, not presented as real | ✅ Confirmed |
 | Human-confirmation point identified | ✅ Confirmed ("a person at the agency confirms that") |
-| Submitted via GitHub Issue Form, public repo, by 2:00 PM CDT | ❓ **Unconfirmed** — haven't located/verified the backing repo or an open submission issue |
-| No commit predating 9:30 AM CDT establishing project logic | ❓ **Unconfirmed** — needs a look at repo commit history |
+| Submitted via GitHub Issue Form, public repo, by 2:00 PM CDT | ❓ **Still open — not yet filed.** Repo confirmed public (`AlyPosey/municipal-crosswalk-routing`), but no submission issue exists yet on `Birmingham-AI/claude-impact-lab`. |
+| No commit predating 9:30 AM CDT establishing project logic | ✅ Confirmed — first commit is `d04a99f` at 12:04:01 PM CDT today, well after the 9:30 AM gate |
 
-**Action:** confirm the public repo exists, has commits starting at/after 9:30 AM CDT today, and that the GitHub Issue Form submission is filed before 2:00 PM CDT (warning fires at 1:45 PM CDT).
+**Action:** file the GitHub Issue Form submission on `Birmingham-AI/claude-impact-lab` before 2:00 PM CDT. This is the last blocking item.
 
 ---
 
 ## What's real vs. simulated
 
 **Working now:**
-- Web intake tool, live and demoable
-- Three-case ownership matrix spanning city / state / county
-- Overlap/gap and staleness flags render on every result
+- Web intake tool, live and demoable, with back navigation and a clearer confirmation step
+- A second entry path: a simulated in-page text-message thread ("Text the crossing (demo)" tab)
+- Working voice input/output via the browser's Web Speech API, off by default
+- Four-case ownership matrix spanning city / state
+- Overlap/gap and staleness flags render on every result, identically from both entry paths
 
 **Simulated / not live:**
-- The SMS short code (55-0142) is a design mockup — no live number exists
+- The SMS short code (`XING-DEMO`, deliberately non-numeric so it can't be mistaken for a real
+  number) and the fictional contact numbers (555-01xx range) are demoed as an in-page simulation —
+  nothing is sent, no telephony is involved
 - Matching is keyword-based, not true natural-language understanding
-- The matrix is hand-curated for three cases, not fed from a live agency data source
+- The matrix is hand-curated for four cases, not fed from a live agency data source
 
 ---
 
@@ -76,10 +80,10 @@ Partner with one municipal public works office to validate the matrix against th
 
 ## Still open before submission
 
-1. **Team README** — needs to follow `templates/TEAM_README_TEMPLATE.md`: team name/ID, primary user, problem, what the project does, data sources, architecture + how Claude was used, link to the artifact, what works today, known limitations, named next step.
-2. **Repo verification** — confirm public visibility and commit timing against the eligibility gate.
-3. **GitHub Issue Form submission** — must be filed before the 2:00 PM CDT deadline.
-4. **Optional:** a 60-second demo video, only required if the artifact can't be reviewed through a working public link.
+1. ~~**Team README**~~ — done. `README.md` follows `docs/TEAM_README_TEMPLATE.md`: team name/ID, primary user, problem, what the project does, data sources, architecture + how Claude was used, link to the artifact, what works today, known limitations, named next step.
+2. ~~**Repo verification**~~ — done. Public visibility confirmed; first commit (12:04 PM CDT) is well after the 9:30 AM CDT gate.
+3. **GitHub Issue Form submission** — **still open, deadline is 2:00 PM CDT.** This is the only remaining blocker.
+4. **Optional:** a 60-second demo video, only required if the artifact can't be reviewed through a working public link (it can — skip this).
 
 ---
 
